@@ -1,0 +1,124 @@
+{
+    "Comment": "A description of my state machine",
+    "StartAt": "Serialize Image Data",
+    "States": {
+      "Serialize Image Data": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Output": "{% $states.result.Payload %}",
+        "Arguments": {
+          "FunctionName": "arn:aws:lambda:us-east-1:424582104650:function:serializeImageData:$LATEST",
+          "Payload": "{% $states.input %}"
+        },
+        "Retry": [
+          {
+            "ErrorEquals": [
+              "Lambda.ServiceException",
+              "Lambda.AWSLambdaException",
+              "Lambda.SdkClientException",
+              "Lambda.TooManyRequestsException"
+            ],
+            "IntervalSeconds": 1,
+            "MaxAttempts": 3,
+            "BackoffRate": 2,
+            "JitterStrategy": "FULL"
+          }
+        ],
+        "Next": "Predict Image",
+        "TimeoutSeconds": 300,
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.TaskFailed"
+            ],
+            "Next": "Fail"
+          }
+        ]
+      },
+      "Predict Image": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Output": "{% $states.result.Payload %}",
+        "Arguments": {
+          "FunctionName": "arn:aws:lambda:us-east-1:424582104650:function:imagePredictionLambda:$LATEST",
+          "Payload": "{% $states.input %}"
+        },
+        "Retry": [
+          {
+            "ErrorEquals": [
+              "Lambda.ServiceException",
+              "Lambda.AWSLambdaException",
+              "Lambda.SdkClientException",
+              "Lambda.TooManyRequestsException"
+            ],
+            "IntervalSeconds": 1,
+            "MaxAttempts": 3,
+            "BackoffRate": 2,
+            "JitterStrategy": "FULL"
+          }
+        ],
+        "Next": "Inference Decision",
+        "TimeoutSeconds": 300,
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.TaskFailed"
+            ],
+            "Next": "Fail"
+          }
+        ]
+      },
+      "Inference Decision": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Output": {
+          "meets_threshold": "{% $states.result.Payload.meets_threshold %}"
+        },
+        "Arguments": {
+          "FunctionName": "arn:aws:lambda:us-east-1:424582104650:function:inferenceDecisionFunction:$LATEST",
+          "Payload": "{% $states.input %}"
+        },
+        "Retry": [
+          {
+            "ErrorEquals": [
+              "Lambda.ServiceException",
+              "Lambda.AWSLambdaException",
+              "Lambda.SdkClientException",
+              "Lambda.TooManyRequestsException"
+            ],
+            "IntervalSeconds": 1,
+            "MaxAttempts": 3,
+            "BackoffRate": 2,
+            "JitterStrategy": "FULL"
+          }
+        ],
+        "TimeoutSeconds": 300,
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.TaskFailed"
+            ],
+            "Next": "Fail"
+          }
+        ],
+        "Next": "Inference Passes Threshold?"
+      },
+      "Inference Passes Threshold?": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Next": "Success",
+            "Condition": "{% $states.input.meets_threshold %}"
+          }
+        ],
+        "Default": "Fail"
+      },
+      "Fail": {
+        "Type": "Fail"
+      },
+      "Success": {
+        "Type": "Succeed"
+      }
+    },
+    "QueryLanguage": "JSONata"
+  }
